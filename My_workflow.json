@@ -1,0 +1,538 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "news",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        -600
+      ],
+      "id": "07cc9cee-e13b-44b3-a1a8-0228c26a7105",
+      "name": "Webhook",
+      "webhookId": "cb9116cc-f758-474e-9702-1bba4efdefd8"
+    },
+    {
+      "parameters": {
+        "url": "https://news.google.com/rss/search?q=(인공지능+트렌드+OR+AI+OR+생성형+AI+OR+제조업+AI)&hl=ko&gl=KR&ceid=KR:ko",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        260,
+        -380
+      ],
+      "id": "3b9c185d-e9bd-42d4-a273-c526a7875564",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.xml",
+      "typeVersion": 1,
+      "position": [
+        500,
+        -380
+      ],
+      "id": "fdfae2ff-9815-443d-82f1-bfbed4f2d7df",
+      "name": "XML"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "rss.channel.item",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        760,
+        -520
+      ],
+      "id": "8f415629-8773-4971-8307-b68edf17132d",
+      "name": "Split Out"
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Access-Control-Allow-Methods",
+                "value": "GET, POST, OPTIONS"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1380,
+        120
+      ],
+      "id": "e8e38310-3dc5-4028-9c54-a402ba8318ef",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=### [Context: 수집된 뉴스 데이터]\n이 데이터가 너의 유일한 정보원이야.\n{{ JSON.stringify($json.data) }}\n### [데이터 끝]\n\n---\n\n### [작업 지침]\n위 [Context]를 정밀 분석하여 다음 단계로 리포트를 작성해:\n\n1. **필터링 (AI Check):**\n   - 기사 내용이 'AI'와 관련이 없는 경우(예: 단순 주식 시황, 일반 가전 제품 등)는 과감히 **제외**해.\n\n2. **평가 및 랭킹 (Ranking Logic):**\n   - **1순위 (Must Read):** AI와 관련된 **보안 위협**(해킹, 데이터 유출), **규제/컴플라이언스**, 또는 **글로벌 빅테크의 중대 발표**(GPT-5 등).\n   - **2순위 (Good to Know):** 사내 업무 효율화, 코딩 자동화, 온프레미스(사내 구축) AI 모델 소식.\n   - **3순위:** 기타 AI 일반 트렌드.\n   - *위 우선순위에 따라 상위 18개를 선정할 것.*\n\n3. **요약 (Summary):**\n   - 한국어 3문장 이내.\n   - \"어떤 기술인가\"보다 **\"무엇이 가능해지는가\"**에 초점.\n\n4. **인사이트 (Insight for IT/Sec):**\n   - 이 뉴스를 보안/IT 담당자가 왜 봐야 하는지 한 줄 코멘트.\n   - 예: \"보안센터 관점: 생성형 AI 사용 시 내부 데이터 유출 가능성을 점검해야 합니다.\"\n   - 예: \"IT센터 관점: 사내 헬프데스크 자동화에 적용 가능한 기술입니다.\"\n\n5. **검증:**\n   - 'original_link'는 [Context]의 'std_link'와 100% 일치해야 함.\n\n### [출력 형식 (JSON Only)]\nMarkdown 코드블럭 없이 순수 JSON만 출력해.\n\n{\n  \"top_keywords\": [\"키워드1(보안/AI이슈)\", \"키워드2\", \"키워드3\"],\n  \"articles\": [\n    {\n      \"rank\": 1,\n      \"title\": \"기사 제목 (독자가 클릭하고 싶게 수정)\",\n      \"summary\": \"핵심 요약\",\n      \"insight\": \"보안/IT 관점의 인사이트 (핵심)\",\n      \"original_link\": \"원문 링크(std_link)\"\n    }\n  ]\n}",
+              "role": "assistant"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        240,
+        100
+      ],
+      "id": "4dffcbba-e0fc-4aad-9a7f-9731218ede08",
+      "name": "OpenAI",
+      "credentials": {
+        "openAiApi": {
+          "id": "D3VlnnxPX6Vc15S8",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "maxItems": 18
+      },
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        -380
+      ],
+      "id": "99d385a4-ed4e-44ea-ace2-8a53ef4d3fa3",
+      "name": "Limit"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        -380
+      ],
+      "id": "f29426d3-f848-4f04-a1b4-9e8441b20f93",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e353f326-ac3a-475e-a7b8-5bd906f0d4d1",
+              "leftValue": "={{ $json.std_date }}",
+              "rightValue": "={{ $now.minus({ days: 1 }) }}",
+              "operator": {
+                "type": "dateTime",
+                "operation": "after"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        1220,
+        -620
+      ],
+      "id": "fc0e4473-6f2b-46d6-b571-5e094c714339",
+      "name": "Filter"
+    },
+    {
+      "parameters": {
+        "url": "https://www.aitimes.com/rss/allArticle.xml",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        180,
+        -840
+      ],
+      "id": "abe7780f-4f71-4192-aa80-8c572904f28b",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "url": "https://www.newstheai.com/rss/clickTop.xml",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        -600
+      ],
+      "id": "fdac3437-67f3-4d8a-b09b-5adf4e95afb1",
+      "name": "HTTP Request2"
+    },
+    {
+      "parameters": {
+        "numberInputs": 3
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        540,
+        -640
+      ],
+      "id": "69450db9-d45f-412b-bd38-832de5fa2a9e",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        1440,
+        -240
+      ],
+      "id": "a6b739d3-f685-4683-97df-3df47db88ded",
+      "name": "Aggregate"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "64bd6084-a4d9-4ceb-8ba7-32a483ecb7ec",
+              "name": "std_title",
+              "value": "={{ $json.title }}",
+              "type": "string"
+            },
+            {
+              "id": "cd452ea8-c562-4019-aabf-9fde09fa1eaf",
+              "name": "std_link",
+              "value": "={{ $json.link }}",
+              "type": "string"
+            },
+            {
+              "id": "f39cf634-a6d5-4449-bea2-6aa9b2180cc6",
+              "name": "std_content",
+              "value": "={{ $json.description.replace(/<[^>]*>?/gm, '') }}",
+              "type": "string"
+            },
+            {
+              "id": "7382f156-6afd-4f5c-8e53-bb81efbf2c14",
+              "name": "=std_date",
+              "value": "={{ DateTime.fromFormat($json.pubDate.replace('GMT', '').trim(), $json.pubDate.includes('GMT') ? 'EEE, dd MMM yyyy HH:mm:ss' : 'yyyy-MM-dd HH:mm:ss').toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        920,
+        -660
+      ],
+      "id": "7c9ef1d2-8863-401f-a08a-b53d8cc18747",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. OpenAI 응답 데이터 가져오기\n// n8n의 첫 번째 아이템에서 message.content를 가져옵니다.\nconst item = $input.first().json;\nlet contentData = item.message.content;\n\n// 2. 안전장치: 혹시라도 content가 '문자열(String)'로 들어왔을 경우를 대비해 파싱합니다.\n// (OpenAI 설정이나 가끔 발생하는 오류로 문자열로 올 때가 있습니다)\nif (typeof contentData === 'string') {\n  // 마크다운 코드블럭(```json ... ```)이 섞여 있을 경우 제거\n  const cleanJson = contentData.replace(/```json\\n|\\n```/g, '').trim();\n  try {\n    contentData = JSON.parse(cleanJson);\n  } catch (e) {\n    throw new Error(\"JSON 파싱 실패: OpenAI 응답이 올바른 JSON 형식이 아닙니다.\");\n  }\n}\n\n// 3. 데이터 추출\n// 만약 키워드가 없으면 빈 배열로 처리\nconst topKeywords = contentData.top_keywords || []; \nconst articles = contentData.articles || [];\n\n// 4. Supabase 입력용 데이터로 변환 (매핑)\n// 기사 리스트를 하나씩 돌면서 포맷을 맞춥니다.\nreturn articles.map(article => {\n  return {\n    // Supabase 컬럼명 : OpenAI 데이터\n    title: article.title,\n    summary: article.summary,\n    insight: article.insight,\n    original_link: article.original_link,\n    \n    // 모든 기사 행에 '오늘의 핵심 키워드'를 공통으로 넣어줍니다.\n    // (Supabase에서 jsonb 타입으로 설정했으므로 배열 그대로 넣으면 됩니다)\n    keywords: topKeywords, \n    \n    // 오늘 날짜 생성 (ISO 포맷)\n    published_date: new Date().toISOString()\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        100
+      ],
+      "id": "a651c8cc-b1e8-48a8-a82b-f42cad9de721",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "tableId": "daily_ai_news",
+        "dataToSend": "autoMapInputData"
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        980,
+        100
+      ],
+      "id": "88298ba1-9fa4-4efb-8d4b-0c965c765730",
+      "name": "Supabase",
+      "credentials": {
+        "supabaseApi": {
+          "id": "7IHRUvjmPaw5ZAMk",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.std_link }}",
+        "options": {},
+        "requestOptions": {}
+      },
+      "type": "n8n-nodes-base.jinaAi",
+      "typeVersion": 1,
+      "position": [
+        1640,
+        -520
+      ],
+      "id": "1d9766a5-2afa-4c13-b9e8-872d98290cea",
+      "name": "Jina AI",
+      "credentials": {
+        "jinaAiApi": {
+          "id": "eYsRvFGpQRkGGpf1",
+          "name": "Jina AI account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        []
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "XML": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limit": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HTTP Request2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter": {
+      "main": [
+        [
+          {
+            "node": "Limit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request2": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "XML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "OpenAI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase": {
+      "main": [
+        []
+      ]
+    },
+    "Jina AI": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "b0deb073-b986-4d59-9c98-8878ec67854a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "1c1f641564d6b9ec300c3865e2ae9d6c02c86c83cc9fb831233794b44c59ceb0"
+  },
+  "id": "KwMwwNGVUYvZd5Eu",
+  "tags": []
+}
