@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { ExternalLink, Loader2, Sparkles, FileText } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 
 interface SummaryModalProps {
     isOpen: boolean;
@@ -19,8 +19,9 @@ export function SummaryModal({ isOpen, onClose, articleUrl }: SummaryModalProps)
     const [summary, setSummary] = useState<string>("");
     const [isLoadingState, setIsLoadingState] = useState(false);
     const [errorState, setErrorState] = useState<string | null>(null);
+    const abortControllerRef = useRef<AbortController | null>(null);
 
-    const handleStream = async (url: string) => {
+    const handleStream = async (url: string, signal: AbortSignal) => {
         setIsLoadingState(true);
         setErrorState(null);
         setSummary("");
@@ -36,6 +37,7 @@ export function SummaryModal({ isOpen, onClose, articleUrl }: SummaryModalProps)
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify({ url }),
+                signal,
             });
 
             console.log("📥 Response received:", response.status, response.statusText);
@@ -110,18 +112,44 @@ export function SummaryModal({ isOpen, onClose, articleUrl }: SummaryModalProps)
             }
 
         } catch (err: any) {
+            if (err.name === 'AbortError') {
+                console.log('✋ Stream aborted');
+                return;
+            }
             console.error("❌ Stream error:", err);
             setErrorState(err.message || "Failed to load summary");
         } finally {
-            setIsLoadingState(false);
+            // Only turn off loading if not aborted (or if we want to ensure it's off)
+            // If aborted, the component might be unmounting or switching, so state updates might be ignored or fine.
+            // But checking signal.aborted is safer if we want to avoid state updates on unmounted component.
+            if (!signal.aborted) {
+                setIsLoadingState(false);
+            }
         }
     };
 
     useEffect(() => {
         if (isOpen && articleUrl) {
+            // Abort previous request if any
+            if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
+            }
+
+            // Create new controller
+            const controller = new AbortController();
+            abortControllerRef.current = controller;
+
             console.log("🚀 Modal opened with URL:", articleUrl);
-            handleStream(articleUrl);
+            handleStream(articleUrl, controller.signal);
         }
+
+        return () => {
+            // Abort on cleanup (close or unmount or dep change)
+            if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
+                abortControllerRef.current = null;
+            }
+        };
     }, [isOpen, articleUrl]);
 
     return (

@@ -1,8 +1,8 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useRef, useEffect, useState, useCallback } from "react"
 import { Card } from "@/components/ui/card"
-import { Loader2, Globe, RefreshCw, Sparkles, LayoutDashboard, Newspaper, Youtube, Play } from "lucide-react"
+import { Loader2, Globe, RefreshCw, Sparkles, LayoutDashboard, Newspaper, Youtube, Play, ArrowUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { supabase } from "@/lib/supabase"
 import { SummaryModal } from "./summary-modal"
@@ -10,6 +10,24 @@ import { YouTubeCard } from "./youtube-card"
 import { YouTubeModal } from "./youtube-modal"
 import { DailyBriefing } from "./daily-briefing"
 import { cn } from "@/lib/utils"
+
+// Helper function to generate consistent colors from strings
+const getKeywordStyle = (keyword: string) => {
+  let hash = 0;
+  for (let i = 0; i < keyword.length; i++) {
+    hash = keyword.charCodeAt(i) + ((hash << 5) - hash);
+  }
+
+  // Generate HSL color with fixed saturation and lightness for consistency
+  // Use a limited hue range or specific palette if needed, but full spectrum is fine for variety
+  const hue = Math.abs(hash % 360);
+
+  return {
+    bg: `hsl(${hue}, 70%, 95%)`, // Very light background
+    text: `hsl(${hue}, 80%, 30%)`, // Dark text
+    border: `hsl(${hue}, 60%, 85%)` // Subtle border
+  };
+}
 
 // Mock Data for Demo
 const MOCK_YOUTUBE_DATA = {
@@ -89,6 +107,19 @@ export function NewsDashboard() {
   const [news, setNews] = useState<NewsItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [showScrollTop, setShowScrollTop] = useState(false)
+
+  // Daily Briefing State
+  const [dailyBriefing, setDailyBriefing] = useState<{
+    date: string
+    title: string
+    summary: string
+    keyPoints: string[]
+  } | null>(null)
+
+  // Infinite Scroll State
+  const [visibleCount, setVisibleCount] = useState(12)
+  const loadMoreRef = useRef<HTMLDivElement>(null)
 
   // Modal states
   const [selectedArticle, setSelectedArticle] = useState<string | null>(null)
@@ -97,19 +128,120 @@ export function NewsDashboard() {
   const [selectedVideo, setSelectedVideo] = useState<NewsItem | null>(null)
   const [isYouTubeModalOpen, setIsYouTubeModalOpen] = useState(false)
 
+  // Reset visible count when tab changes
+  useEffect(() => {
+    setVisibleCount(12)
+  }, [activeTab])
+
+  // Infinite Scroll Observer
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setVisibleCount((prev) => prev + 12)
+        }
+      },
+      { threshold: 0.1 }
+    )
+
+    if (loadMoreRef.current) {
+      observer.observe(loadMoreRef.current)
+    }
+
+    return () => observer.disconnect()
+  }, [news, visibleCount])
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (window.scrollY > 300) {
+        setShowScrollTop(true)
+      } else {
+        setShowScrollTop(false)
+      }
+    }
+
+    window.addEventListener('scroll', handleScroll)
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
+
   const fetchNews = async () => {
     setLoading(true)
     setError(null)
     try {
+      // Fetch Daily Briefing (only for AI tab)
+      if (activeTab === 'ai') {
+        // Get today's date in local time (YYYY-MM-DD)
+        const date = new Date()
+        const year = date.getFullYear()
+        const month = String(date.getMonth() + 1).padStart(2, '0')
+        const day = String(date.getDate()).padStart(2, '0')
+        const today = `${year}-${month}-${day}`
+
+        const { data: briefingData, error: briefingError } = await supabase
+          .from('daily_summary_reports')
+          .select('*')
+          .eq('summary_date', today)
+          .maybeSingle()
+
+        if (briefingError) {
+          console.error("Error fetching briefing:", briefingError)
+        }
+
+        if (briefingData) {
+          setDailyBriefing({
+            date: briefingData.summary_date,
+            title: briefingData.overall_title || "오늘의 AI 요약",
+            summary: briefingData.overall_summary || "",
+            keyPoints: Array.isArray(briefingData.key_topics) ? briefingData.key_topics : []
+          })
+        } else {
+          setDailyBriefing(null)
+        }
+      }
+
       let query = supabase
         .from('daily_ai_news')
         .select('*')
         .order('published_date', { ascending: false })
 
-      // Apply filters based on activeTab
       if (activeTab === 'ai') {
+        // 1. Get the latest published_date first to filter by the most recent day
+        const { data: latestData, error: latestError } = await supabase
+          .from('daily_ai_news')
+          .select('published_date')
+          .or('category.is.null,category.eq.AI')
+          .order('published_date', { ascending: false })
+          .limit(1)
+
+        if (latestError) {
+          console.error("Supabase Error (Date Fetch):", latestError)
+          throw latestError
+        }
+
+        if (!latestData || latestData.length === 0) {
+          setNews([])
+          setLoading(false)
+          return
+        }
+
+        const latestDateStr = latestData[0].published_date
+        console.log(`Latest date found for AI: ${latestDateStr}`)
+
+        // Filter by the identified date
+        const datePart = latestDateStr.split('T')[0]
+        if (latestDateStr.length === 10) {
+          query = query.eq('published_date', latestDateStr)
+        } else {
+          query = query
+            .gte('published_date', `${datePart}T00:00:00`)
+            .lte('published_date', `${datePart}T23:59:59`)
+        }
+
+        // Apply category filter
         query = query.or('category.is.null,category.eq.AI')
+
       } else if (activeTab === 'youtube') {
+        // YouTube: Just filter for videos, no date restriction
         query = query.not('video_id', 'is', null).neq('video_id', '')
       }
 
@@ -310,93 +442,109 @@ export function NewsDashboard() {
         )}
 
         {/* Daily Briefing - Only for AI Tab */}
-        {activeTab === 'ai' && !loading && !error && news.length > 0 && (
-          <DailyBriefing />
+        {activeTab === 'ai' && !loading && !error && dailyBriefing && (
+          <DailyBriefing data={dailyBriefing} />
         )}
 
         {/* Content Grid */}
         {!loading && !error && news.length > 0 && (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {news.map((item, index) => (
-              item.videoId ? (
-                <YouTubeCard
-                  key={item.id || index}
-                  title={item.translatedTitle}
-                  publishedAt={item.pubDate}
-                  summary={item.summary}
-                  videoId={item.videoId}
-                  onClick={() => handleCardClick(item)}
-                />
-              ) : (
-                <Card
-                  key={item.id || index}
-                  className="group relative overflow-hidden border-border bg-card transition-all hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10 cursor-pointer flex flex-col"
-                  onClick={() => handleCardClick(item)}
-                >
-                  <div className="flex flex-col flex-1 p-6">
-                    {/* Date Badge */}
-                    <div className="mb-3 flex items-center gap-2">
-                      <span className="rounded-md bg-muted px-2 py-1 font-mono text-xs text-muted-foreground">
-                        {formatDate(item.pubDate)}
-                      </span>
-                    </div>
-
-                    {/* Title */}
-                    <div className="flex items-start gap-2 mb-3">
-                      {item.rank && (
-                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-primary/20 text-[12px] font-bold text-primary">
-                          {item.rank}
+          <>
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {news.slice(0, visibleCount).map((item, index) => (
+                item.videoId ? (
+                  <YouTubeCard
+                    key={item.id || index}
+                    title={item.translatedTitle}
+                    publishedAt={item.pubDate}
+                    summary={item.summary}
+                    videoId={item.videoId}
+                    onClick={() => handleCardClick(item)}
+                  />
+                ) : (
+                  <Card
+                    key={item.id || index}
+                    className="group relative overflow-hidden border-border bg-card transition-all hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10 cursor-pointer flex flex-col h-full"
+                    onClick={() => handleCardClick(item)}
+                  >
+                    <div className="flex flex-col flex-1 p-6">
+                      {/* Date Badge */}
+                      <div className="mb-4 flex items-center gap-2">
+                        <span className="rounded-md bg-muted px-2.5 py-1 font-mono text-xs font-medium text-muted-foreground">
+                          {formatDate(item.pubDate)}
                         </span>
-                      )}
-                      <h3 className="text-balance font-sans text-lg font-semibold leading-snug text-foreground group-hover:text-primary transition-colors line-clamp-2">
-                        {item.translatedTitle}
-                      </h3>
-                    </div>
-
-                    {/* Summary */}
-                    {item.summary && (
-                      <p className="mb-4 text-sm text-muted-foreground line-clamp-3 leading-relaxed flex-1">
-                        {item.summary}
-                      </p>
-                    )}
-
-                    {/* Insight Section */}
-                    {item.insight && (
-                      <div className="mb-4 rounded-md bg-muted/50 p-3 italic">
-                        <p className="text-xs text-muted-foreground line-clamp-3">
-                          <span className="font-bold not-italic text-primary mr-1">Insight:</span>
-                          {item.insight}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Keywords */}
-                    {item.keywords && item.keywords.length > 0 && (
-                      <div className="mb-4 flex flex-wrap gap-1.5">
-                        {item.keywords.map((keyword, i) => (
-                          <span
-                            key={i}
-                            className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary"
-                          >
-                            #{keyword}
+                        {item.category && (
+                          <span className="rounded-md bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent">
+                            {item.category}
                           </span>
-                        ))}
+                        )}
                       </div>
-                    )}
 
-                    {/* Link Indicator */}
-                    <div className="mt-auto flex items-center gap-2 text-sm text-muted-foreground group-hover:text-accent transition-colors">
-                      <span>Quick Summary</span>
-                      <Sparkles className="h-4 w-4 transition-transform group-hover:scale-110" />
+                      {/* Title */}
+                      <div className="flex items-start gap-3 mb-4">
+                        {item.rank && (
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-sm font-bold text-primary">
+                            {item.rank}
+                          </span>
+                        )}
+                        <h3 className="text-balance font-sans text-xl font-bold leading-tight text-foreground group-hover:text-primary transition-colors line-clamp-3">
+                          {item.translatedTitle}
+                        </h3>
+                      </div>
+
+                      {/* Summary */}
+                      {item.summary && (
+                        <p className="mb-5 text-[15px] text-muted-foreground/90 line-clamp-3 leading-relaxed flex-1">
+                          {item.summary}
+                        </p>
+                      )}
+
+                      {/* Insight Section */}
+                      {item.insight && (
+                        <div className="mb-5 rounded-lg bg-muted/30 p-4 border border-border/50">
+                          <p className="text-sm text-muted-foreground line-clamp-3">
+                            <span className="font-semibold text-primary mr-2">💡 Insight:</span>
+                            {item.insight}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Keywords */}
+                      {item.keywords && item.keywords.length > 0 && (
+                        <div className="mt-auto flex flex-wrap gap-2 justify-center">
+                          {item.keywords.map((keyword, i) => {
+                            const style = getKeywordStyle(keyword);
+                            return (
+                              <span
+                                key={i}
+                                className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors"
+                                style={{
+                                  backgroundColor: style.bg,
+                                  color: style.text,
+                                  border: `1px solid ${style.border}`
+                                }}
+                              >
+                                #{keyword}
+                              </span>
+                            )
+                          })}
+                        </div>
+                      )}
                     </div>
-                  </div>
 
-                  {/* Hover Effect Border */}
-                  <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-primary to-accent opacity-0 transition-opacity group-hover:opacity-100" />
-                </Card>
-              )
-            ))}
-          </div>
+                    {/* Hover Effect Border */}
+                    <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-primary to-accent opacity-0 transition-opacity group-hover:opacity-100" />
+                  </Card>
+                )
+              ))}
+            </div>
+
+            {/* Infinite Scroll Loader */}
+            {visibleCount < news.length && (
+              <div ref={loadMoreRef} className="flex justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground/50" />
+              </div>
+            )}
+          </>
         )}
 
         {/* Empty State */}
@@ -430,6 +578,18 @@ export function NewsDashboard() {
             keywords={selectedVideo.keywords}
           />
         )}
+
+        {/* Scroll to Top Button */}
+        <Button
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          className={cn(
+            "fixed bottom-8 right-8 rounded-full h-12 w-12 shadow-lg z-50 transition-all duration-300 hover:scale-110",
+            showScrollTop ? "opacity-100 translate-y-0" : "opacity-0 translate-y-10 pointer-events-none"
+          )}
+          size="icon"
+        >
+          <ArrowUp className="h-6 w-6" />
+        </Button>
       </div>
     </div>
   )
