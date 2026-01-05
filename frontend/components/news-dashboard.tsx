@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabase"
 import { SummaryModal } from "./summary-modal"
 import { YouTubeCard } from "./youtube-card"
 import { YouTubeModal } from "./youtube-modal"
+import { DailyBriefing } from "./daily-briefing"
 import { cn } from "@/lib/utils"
 
 // Mock Data for Demo
@@ -80,10 +81,11 @@ interface NewsItem {
   category?: string
   videoId?: string
   segments?: any
+  startTime?: number
 }
 
 export function NewsDashboard() {
-  const [activeTab, setActiveTab] = useState<"ai" | "it" | "youtube">("ai")
+  const [activeTab, setActiveTab] = useState<"ai" | "youtube">("ai")
   const [news, setNews] = useState<NewsItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -107,10 +109,8 @@ export function NewsDashboard() {
       // Apply filters based on activeTab
       if (activeTab === 'ai') {
         query = query.or('category.is.null,category.eq.AI')
-      } else if (activeTab === 'it') {
-        query = query.eq('category', 'IT')
       } else if (activeTab === 'youtube') {
-        query = query.not('video_id', 'is', null)
+        query = query.not('video_id', 'is', null).neq('video_id', '')
       }
 
       const { data, error } = await query
@@ -122,20 +122,76 @@ export function NewsDashboard() {
 
       console.log(`Fetched ${data?.length} items for tab: ${activeTab}`, data)
 
-      const processedData = Array.isArray(data) ? data.map((item: any) => ({
-        id: item.id,
-        translatedTitle: item.title || "No Title",
-        summary: item.summary || "",
-        insight: item.insight || "",
-        keywords: Array.isArray(item.keywords) ? item.keywords : [],
-        link: item.original_link || "#",
-        pubDate: item.published_date || item.created_at || new Date().toISOString(),
-        category: item.category,
-        videoId: item.video_id,
-        segments: item.segments
-      })) : []
+      const processedData = Array.isArray(data) ? data.map((item: any) => {
+        // Parse segments if it's a string, or use as is if object
+        const segmentData = typeof item.segments === 'string' ? JSON.parse(item.segments) : item.segments
 
-      setNews(processedData)
+        // Extract start_time from the segment data if available
+        // The segments column seems to be an array of objects based on user feedback
+        let startTime = 0
+        if (Array.isArray(segmentData) && segmentData.length > 0) {
+          startTime = segmentData[0].start_time || 0
+        } else if (segmentData && typeof segmentData === 'object') {
+          startTime = segmentData.start_time || 0
+        }
+
+        return {
+          id: item.id,
+          translatedTitle: item.title || "No Title",
+          summary: item.summary || "",
+          insight: item.insight || "",
+          keywords: Array.isArray(item.keywords) ? item.keywords : [],
+          link: item.original_link || "#",
+          pubDate: item.published_date || item.created_at || new Date().toISOString(),
+          category: item.category,
+          videoId: item.video_id,
+          segments: item.segments, // Keep original for reference/modal if needed, though we are grouping
+          startTime: startTime
+        }
+      }) : []
+
+      // Group by videoId
+      const groupedData: NewsItem[] = []
+      const videoMap = new Map<string, NewsItem>()
+
+      processedData.forEach(item => {
+        if (item.videoId) {
+          if (videoMap.has(item.videoId)) {
+            const existing = videoMap.get(item.videoId)!
+
+            // If the existing item doesn't have segments yet, initialize it with itself as the first segment
+            if (!existing.segments) {
+              existing.segments = [{
+                start_time: existing.startTime || 0,
+                title: existing.translatedTitle,
+                content: existing.summary
+              }]
+            }
+
+            // Add current item as a new segment
+            // Check if this segment is already in the list (deduplication based on title/content)
+            const isDuplicate = existing.segments.some((s: any) => s.title === item.translatedTitle && s.content === item.summary)
+            if (!isDuplicate) {
+              existing.segments.push({
+                start_time: item.startTime || 0,
+                title: item.translatedTitle,
+                content: item.summary
+              })
+            }
+          } else {
+            // New video item
+            videoMap.set(item.videoId, item)
+            groupedData.push(item)
+          }
+        } else {
+          groupedData.push(item)
+        }
+      })
+
+      // Re-process groupedData to ensure single-item videos also have segments structure if they were grouped
+      // Actually, the map reference is in groupedData, so updates to 'existing' in the map are reflected.
+
+      setNews(groupedData)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load content")
       console.error("Error fetching news:", err)
@@ -162,7 +218,7 @@ export function NewsDashboard() {
   }
 
   const handleCardClick = (item: NewsItem) => {
-    if (activeTab === 'youtube') {
+    if (item.videoId) {
       setSelectedVideo(item)
       setIsYouTubeModalOpen(true)
     } else {
@@ -192,14 +248,6 @@ export function NewsDashboard() {
               AI News
             </Button>
             <Button
-              variant={activeTab === 'it' ? 'secondary' : 'ghost'}
-              onClick={() => setActiveTab('it')}
-              className={cn("rounded-full px-6 gap-2 transition-all", activeTab === 'it' && "bg-background shadow-sm")}
-            >
-              <Newspaper className="h-4 w-4" />
-              IT News
-            </Button>
-            <Button
               variant={activeTab === 'youtube' ? 'secondary' : 'ghost'}
               onClick={() => setActiveTab('youtube')}
               className={cn("rounded-full px-6 gap-2 transition-all", activeTab === 'youtube' && "bg-background shadow-sm")}
@@ -217,17 +265,11 @@ export function NewsDashboard() {
               <Globe className="h-5 w-5 text-primary-foreground" />
             </div>
             <h1 className="text-balance font-sans text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              {activeTab === 'ai' ? 'Daily AI News' : activeTab === 'it' ? 'IT Industry News' : 'YouTube Insights'}
+              {activeTab === 'ai' ? 'Daily AI News' : 'YouTube Insights'}
             </h1>
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Demo Button */}
-            <Button onClick={handleDemoClick} variant="secondary" className="gap-2">
-              <Play className="h-4 w-4" />
-              Test Demo
-            </Button>
-
             <div className="flex items-center gap-4 rounded-lg border border-border bg-card/50 px-4 py-2">
               <div className="flex items-center gap-2">
                 <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
@@ -267,11 +309,16 @@ export function NewsDashboard() {
           </Card>
         )}
 
+        {/* Daily Briefing - Only for AI Tab */}
+        {activeTab === 'ai' && !loading && !error && news.length > 0 && (
+          <DailyBriefing />
+        )}
+
         {/* Content Grid */}
         {!loading && !error && news.length > 0 && (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {news.map((item, index) => (
-              activeTab === 'youtube' ? (
+              item.videoId ? (
                 <YouTubeCard
                   key={item.id || index}
                   title={item.translatedTitle}

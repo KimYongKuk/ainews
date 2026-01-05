@@ -76,10 +76,10 @@ export function YouTubeModal({ isOpen, onClose, videoUrl, videoId: propVideoId, 
 
     return (
         <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-            <DialogContent className="sm:max-w-4xl p-0 overflow-hidden gap-0 border-0 shadow-2xl bg-background/95 backdrop-blur-md h-[90vh] flex flex-col">
+            <DialogContent className="sm:max-w-6xl p-0 overflow-hidden gap-0 border-0 shadow-2xl bg-background/95 backdrop-blur-md h-[90vh] flex flex-col md:flex-row">
 
                 {/* Header / Video Section */}
-                <div className="w-full bg-black aspect-video relative shrink-0">
+                <div className="w-full md:w-[55%] bg-black relative shrink-0 aspect-video md:aspect-auto md:h-full flex items-center justify-center">
                     {videoId ? (
                         <YouTube
                             key={videoId} // Force remount when videoId changes
