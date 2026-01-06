@@ -209,7 +209,7 @@ export function NewsDashboard() {
         const { data: latestData, error: latestError } = await supabase
           .from('daily_ai_news')
           .select('published_date')
-          .or('category.is.null,category.eq.AI')
+          .or('category.is.null,category.eq.AI,category.eq.News')
           .order('published_date', { ascending: false })
           .limit(1)
 
@@ -238,7 +238,7 @@ export function NewsDashboard() {
         }
 
         // Apply category filter
-        query = query.or('category.is.null,category.eq.AI')
+        query = query.or('category.is.null,category.eq.AI,category.eq.News')
 
       } else if (activeTab === 'youtube') {
         // YouTube: Just filter for videos, no date restriction
@@ -397,7 +397,7 @@ export function NewsDashboard() {
               <Globe className="h-5 w-5 text-primary-foreground" />
             </div>
             <h1 className="text-balance font-sans text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              {activeTab === 'ai' ? 'Daily AI News' : 'YouTube Insights'}
+              {activeTab === 'ai' ? 'Daily News' : 'YouTube Insights'}
             </h1>
           </div>
 
