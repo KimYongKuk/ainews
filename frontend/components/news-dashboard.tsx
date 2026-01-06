@@ -100,6 +100,7 @@ interface NewsItem {
   videoId?: string
   segments?: any
   startTime?: number
+  keyTopics?: string[]
 }
 
 export function NewsDashboard() {
@@ -127,6 +128,13 @@ export function NewsDashboard() {
 
   const [selectedVideo, setSelectedVideo] = useState<NewsItem | null>(null)
   const [isYouTubeModalOpen, setIsYouTubeModalOpen] = useState(false)
+
+  // Topic Filtering State
+  const [selectedTopic, setSelectedTopic] = useState<string | null>(null)
+
+  const handleTopicClick = (topic: string) => {
+    setSelectedTopic(prev => prev === topic ? null : topic)
+  }
 
   // Reset visible count when tab changes
   useEffect(() => {
@@ -202,7 +210,6 @@ export function NewsDashboard() {
       let query = supabase
         .from('daily_ai_news')
         .select('*')
-        .order('published_date', { ascending: false })
 
       if (activeTab === 'ai') {
         // 1. Get the latest published_date first to filter by the most recent day
@@ -237,12 +244,17 @@ export function NewsDashboard() {
             .lte('published_date', `${datePart}T23:59:59`)
         }
 
-        // Apply category filter
-        query = query.or('category.is.null,category.eq.AI,category.eq.News')
+        // Apply category filter and Sort by Rank
+        query = query
+          .or('category.is.null,category.eq.AI,category.eq.News')
+          .order('rank', { ascending: true })
 
       } else if (activeTab === 'youtube') {
-        // YouTube: Just filter for videos, no date restriction
-        query = query.not('video_id', 'is', null).neq('video_id', '')
+        // YouTube: Just filter for videos, no date restriction, Sort by Date
+        query = query
+          .not('video_id', 'is', null)
+          .neq('video_id', '')
+          .order('published_date', { ascending: false })
       }
 
       const { data, error } = await query
@@ -278,7 +290,8 @@ export function NewsDashboard() {
           category: item.category,
           videoId: item.video_id,
           segments: item.segments, // Keep original for reference/modal if needed, though we are grouping
-          startTime: startTime
+          startTime: startTime,
+          keyTopics: Array.isArray(item.key_topics) ? item.key_topics : []
         }
       }) : []
 
@@ -443,99 +456,105 @@ export function NewsDashboard() {
 
         {/* Daily Briefing - Only for AI Tab */}
         {activeTab === 'ai' && !loading && !error && dailyBriefing && (
-          <DailyBriefing data={dailyBriefing} />
+          <DailyBriefing
+            data={dailyBriefing}
+            onTopicClick={handleTopicClick}
+            selectedTopic={selectedTopic}
+          />
         )}
 
         {/* Content Grid */}
         {!loading && !error && news.length > 0 && (
           <>
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {news.slice(0, visibleCount).map((item, index) => (
-                item.videoId ? (
-                  <YouTubeCard
-                    key={item.id || index}
-                    title={item.translatedTitle}
-                    publishedAt={item.pubDate}
-                    summary={item.summary}
-                    videoId={item.videoId}
-                    onClick={() => handleCardClick(item)}
-                  />
-                ) : (
-                  <Card
-                    key={item.id || index}
-                    className="group relative overflow-hidden border-border bg-card transition-all hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10 cursor-pointer flex flex-col h-full"
-                    onClick={() => handleCardClick(item)}
-                  >
-                    <div className="flex flex-col flex-1 p-6">
-                      {/* Date Badge */}
-                      <div className="mb-4 flex items-center gap-2">
-                        <span className="rounded-md bg-muted px-2.5 py-1 font-mono text-xs font-medium text-muted-foreground">
-                          {formatDate(item.pubDate)}
-                        </span>
-                        {item.category && (
-                          <span className="rounded-md bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent">
-                            {item.category}
+              {news
+                .filter(item => !selectedTopic || (item.keyTopics && item.keyTopics.includes(selectedTopic)))
+                .slice(0, visibleCount).map((item, index) => (
+                  item.videoId ? (
+                    <YouTubeCard
+                      key={item.id || index}
+                      title={item.translatedTitle}
+                      publishedAt={item.pubDate}
+                      summary={item.summary}
+                      videoId={item.videoId}
+                      onClick={() => handleCardClick(item)}
+                    />
+                  ) : (
+                    <Card
+                      key={item.id || index}
+                      className="group relative overflow-hidden border-border bg-card transition-all hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10 cursor-pointer flex flex-col h-full"
+                      onClick={() => handleCardClick(item)}
+                    >
+                      <div className="flex flex-col flex-1 p-6">
+                        {/* Date Badge */}
+                        <div className="mb-4 flex items-center gap-2">
+                          <span className="rounded-md bg-muted px-2.5 py-1 font-mono text-xs font-medium text-muted-foreground">
+                            {formatDate(item.pubDate)}
                           </span>
-                        )}
-                      </div>
+                          {item.category && (
+                            <span className="rounded-md bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent">
+                              {item.category}
+                            </span>
+                          )}
+                        </div>
 
-                      {/* Title */}
-                      <div className="flex items-start gap-3 mb-4">
-                        {item.rank && (
-                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-sm font-bold text-primary">
-                            {item.rank}
-                          </span>
-                        )}
-                        <h3 className="text-balance font-sans text-xl font-bold leading-tight text-foreground group-hover:text-primary transition-colors line-clamp-3">
-                          {item.translatedTitle}
-                        </h3>
-                      </div>
+                        {/* Title */}
+                        <div className="flex items-start gap-3 mb-4">
+                          {item.rank && (
+                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-sm font-bold text-primary">
+                              {item.rank}
+                            </span>
+                          )}
+                          <h3 className="text-balance font-sans text-xl font-bold leading-tight text-foreground group-hover:text-primary transition-colors line-clamp-3">
+                            {item.translatedTitle}
+                          </h3>
+                        </div>
 
-                      {/* Summary */}
-                      {item.summary && (
-                        <p className="mb-5 text-[15px] text-muted-foreground/90 line-clamp-3 leading-relaxed flex-1">
-                          {item.summary}
-                        </p>
-                      )}
-
-                      {/* Insight Section */}
-                      {item.insight && (
-                        <div className="mb-5 rounded-lg bg-muted/30 p-4 border border-border/50">
-                          <p className="text-sm text-muted-foreground line-clamp-3">
-                            <span className="font-semibold text-primary mr-2">💡 Insight:</span>
-                            {item.insight}
+                        {/* Summary */}
+                        {item.summary && (
+                          <p className="mb-5 text-[15px] text-muted-foreground/90 line-clamp-3 leading-relaxed flex-1">
+                            {item.summary}
                           </p>
-                        </div>
-                      )}
+                        )}
 
-                      {/* Keywords */}
-                      {item.keywords && item.keywords.length > 0 && (
-                        <div className="mt-auto flex flex-wrap gap-2 justify-center">
-                          {item.keywords.map((keyword, i) => {
-                            const style = getKeywordStyle(keyword);
-                            return (
-                              <span
-                                key={i}
-                                className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors"
-                                style={{
-                                  backgroundColor: style.bg,
-                                  color: style.text,
-                                  border: `1px solid ${style.border}`
-                                }}
-                              >
-                                #{keyword}
-                              </span>
-                            )
-                          })}
-                        </div>
-                      )}
-                    </div>
+                        {/* Insight Section */}
+                        {item.insight && (
+                          <div className="mb-5 rounded-lg bg-muted/30 p-4 border border-border/50">
+                            <p className="text-sm text-muted-foreground line-clamp-3">
+                              <span className="font-semibold text-primary mr-2">💡 Insight:</span>
+                              {item.insight}
+                            </p>
+                          </div>
+                        )}
 
-                    {/* Hover Effect Border */}
-                    <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-primary to-accent opacity-0 transition-opacity group-hover:opacity-100" />
-                  </Card>
-                )
-              ))}
+                        {/* Keywords */}
+                        {item.keywords && item.keywords.length > 0 && (
+                          <div className="mt-auto flex flex-wrap gap-2 justify-center">
+                            {item.keywords.map((keyword, i) => {
+                              const style = getKeywordStyle(keyword);
+                              return (
+                                <span
+                                  key={i}
+                                  className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors"
+                                  style={{
+                                    backgroundColor: style.bg,
+                                    color: style.text,
+                                    border: `1px solid ${style.border}`
+                                  }}
+                                >
+                                  #{keyword}
+                                </span>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Hover Effect Border */}
+                      <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-primary to-accent opacity-0 transition-opacity group-hover:opacity-100" />
+                    </Card>
+                  )
+                ))}
             </div>
 
             {/* Infinite Scroll Loader */}

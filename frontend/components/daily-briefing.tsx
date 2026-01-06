@@ -10,9 +10,13 @@ interface DailyBriefingProps {
         summary: string
         keyPoints: string[]
     }
+    onTopicClick?: (topic: string) => void
+    selectedTopic?: string | null
 }
 
-export function DailyBriefing({ data }: DailyBriefingProps) {
+
+
+export function DailyBriefing({ data, onTopicClick, selectedTopic }: DailyBriefingProps) {
     const formatDate = (dateString: string) => {
         try {
             return new Intl.DateTimeFormat("ko-KR", {
@@ -61,16 +65,42 @@ export function DailyBriefing({ data }: DailyBriefingProps) {
                         {/* Key Points */}
                         {data.keyPoints && data.keyPoints.length > 0 && (
                             <div className="grid sm:grid-cols-3 gap-4 pt-4 border-t border-border/50">
-                                {data.keyPoints.map((point, index) => (
-                                    <div key={index} className="flex items-start gap-3 p-3 rounded-xl bg-background/50 border border-border/50 hover:bg-background/80 transition-colors">
-                                        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/20 text-primary text-xs font-bold">
-                                            {index + 1}
+                                {data.keyPoints.map((point, index) => {
+                                    const isSelected = selectedTopic === point;
+
+                                    return (
+                                        <div
+                                            key={index}
+                                            onClick={() => onTopicClick?.(point)}
+                                            className={`group relative flex items-center gap-3 p-3 rounded-xl border transition-all duration-300 cursor-pointer
+                                                ${isSelected
+                                                    ? 'bg-secondary border-primary/50 shadow-md ring-1 ring-primary/20 translate-y-[-2px]'
+                                                    : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20 hover:shadow-lg hover:shadow-primary/5 hover:scale-[1.02] active:scale-[0.98]'
+                                                }`}
+                                        >
+                                            <div
+                                                className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-colors duration-300
+                                                ${isSelected ? 'bg-primary/20 text-primary' : 'bg-white/10 text-foreground/70 group-hover:bg-primary/10 group-hover:text-primary'}`}
+                                            >
+                                                {index + 1}
+                                            </div>
+                                            <span
+                                                className={`text-sm font-medium leading-snug transition-colors duration-300 flex-1
+                                                ${isSelected ? 'text-foreground' : 'text-foreground/80 group-hover:text-foreground'}`}
+                                            >
+                                                {point}
+                                            </span>
+
+                                            {/* Hover Arrow Icon */}
+                                            <ArrowRight className={`w-4 h-4 text-primary transition-all duration-300 absolute right-3
+                                                ${isSelected
+                                                    ? 'opacity-100 translate-x-0'
+                                                    : 'opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0'
+                                                }`}
+                                            />
                                         </div>
-                                        <span className="text-sm font-medium text-foreground/90 leading-snug">
-                                            {point}
-                                        </span>
-                                    </div>
-                                ))}
+                                    )
+                                })}
                             </div>
                         )}
                     </div>
