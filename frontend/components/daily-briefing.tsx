@@ -74,13 +74,13 @@ export function DailyBriefing({ data, onTopicClick, selectedTopic }: DailyBriefi
                                             onClick={() => onTopicClick?.(point)}
                                             className={`group relative flex items-center gap-3 p-3 rounded-xl border transition-all duration-300 cursor-pointer
                                                 ${isSelected
-                                                    ? 'bg-secondary border-primary/50 shadow-md ring-1 ring-primary/20 translate-y-[-2px]'
-                                                    : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20 hover:shadow-lg hover:shadow-primary/5 hover:scale-[1.02] active:scale-[0.98]'
+                                                    ? 'bg-[#FF4000]/10 border-[#FF4000]/50 shadow-[0_0_15px_rgba(255,64,0,0.1)] ring-1 ring-[#FF4000]/20 translate-y-[-2px]'
+                                                    : 'bg-white/10 border-white/10 hover:bg-white/15 hover:border-white/20 hover:shadow-lg hover:shadow-primary/5 hover:scale-[1.02] active:scale-[0.98]'
                                                 }`}
                                         >
                                             <div
-                                                className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-colors duration-300
-                                                ${isSelected ? 'bg-primary/20 text-primary' : 'bg-white/10 text-foreground/70 group-hover:bg-primary/10 group-hover:text-primary'}`}
+                                                className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-colors duration-300 text-white`}
+                                                style={{ backgroundColor: '#FF4000' }}
                                             >
                                                 {index + 1}
                                             </div>
