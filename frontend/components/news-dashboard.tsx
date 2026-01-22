@@ -390,7 +390,7 @@ export function NewsDashboard() {
               className={cn("rounded-full px-6 gap-2 transition-all", activeTab === 'ai' && "bg-background shadow-sm")}
             >
               <LayoutDashboard className="h-4 w-4" />
-              Daily News
+              Daily News (AI)
             </Button>
             <Button
               variant={activeTab === 'youtube' ? 'secondary' : 'ghost'}
